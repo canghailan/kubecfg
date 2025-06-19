@@ -18,46 +18,32 @@ jobs:
         include:
           - build: linux
             os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-musl
-            archive-name: kubecfg-linux-x64.tar.gz
+            name: kubecfg
           - build: macos
             os: macos-latest
-            rust: stable
-            target: x86_64-apple-darwin
-            archive-name: kubecfg-macos-x64.tar.gz
+            name: kubecfg
           - build: windows
             os: windows-latest
-            rust: stable-x86_64-msvc
-            target: x86_64-pc-windows-msvc
-            archive-name: kubecfg-windows-x64.zip
+            name: kubecfg.exe
       fail-fast: false
 
     steps:
+      - name: Setup
+        run: rustup override set stable
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Build
-        run: cargo build --verbose --release --target ${{ matrix.target }}
-        env:
-          RUST_BACKTRACE: 1
-      - name: Strip
-        if: matrix.build == 'linux' || matrix.build == 'macos'
-        run: strip "target/${{ matrix.target }}/release/kubecfg"
-      - name: Archive
-        shell: bash
-        run: |
-          mkdir archive
-          cp LICENSE README.md archive/
-          cd archive
-          if [ "${{ matrix.build }}" = "windows" ]; then
-            cp "../target/${{ matrix.target }}/release/kubecfg.exe" ./
-            7z a "${{ matrix.archive-name }}" LICENSE README.md kubecfg.exe
-          else
-            cp "../target/${{ matrix.target }}/release/kubecfg" ./
-            tar -czf "${{ matrix.archive-name }}" LICENSE README.md kubecfg
-          fi
+        run: cargo build --verbose --release
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.archive-name }}
-          path: archive/${{ matrix.archive-name }}
+          name: ${{ matrix.name }}
+          path: target/release/${{ matrix.name }}
