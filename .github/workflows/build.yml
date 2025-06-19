@@ -1,20 +1,63 @@
-name: Rust
+name: Build kubecfg
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [linux, macos, windows]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-musl
+            archive-name: kubecfg-linux-x64.tar.gz
+          - build: macos
+            os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+            archive-name: kubecfg-macos-x64.tar.gz
+          - build: windows
+            os: windows-latest
+            rust: stable-x86_64-msvc
+            target: x86_64-pc-windows-msvc
+            archive-name: kubecfg-windows-x64.zip
+      fail-fast: false
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+        env:
+          RUST_BACKTRACE: 1
+      - name: Strip
+        if: matrix.build == 'linux' || matrix.build == 'macos'
+        run: strip "target/${{ matrix.target }}/release/kubecfg"
+      - name: Archive
+        shell: bash
+        run: |
+          mkdir archive
+          cp LICENSE README.md archive/
+          cd archive
+          if [ "${{ matrix.build }}" = "windows" ]; then
+            cp "../target/${{ matrix.target }}/release/kubecfg.exe" ./
+            7z a "${{ matrix.archive-name }}" LICENSE README.md kubecfg.exe
+          else
+            cp "../target/${{ matrix.target }}/release/kubecfg" ./
+            tar -czf "${{ matrix.archive-name }}" LICENSE README.md kubecfg
+          fi
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive-name }}
+          path: archive/${{ matrix.archive-name }}
